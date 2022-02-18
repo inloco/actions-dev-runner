@@ -1,0 +1,106 @@
+name: Dev Runner
+description: Exposes an SSH/VNC Server via cloudflared for development purposes
+author: Incognia
+runs:
+  using: composite
+  steps:
+    - name: SSH
+      shell: bash
+      run: |
+        case $(uname -s) in
+          Darwin)
+            sudo systemsetup -getremotelogin
+            ;;
+
+          Linux)
+            sudo apt-get update
+            sudo apt-get install -y openssh-server
+            sudo systemctl enable ssh
+            sudo systemctl start ssh
+            sudo systemctl status ssh
+            ;;
+
+          *)
+            echo "unsuported os: $(uname -a)"
+            exit 1
+            ;;
+        esac
+
+        mkdir -pm 700 ~/.ssh
+        curl -Lfs 'https://github.com/${{ github.actor }}.keys' >> ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+    - name: SSH
+      shell: bash
+      run: |
+        case $(uname -s) in
+          Darwin)
+            sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
+            sudo launchctl load -wF /System/Library/LaunchDaemons/com.apple.screensharing.plist
+            ;;
+
+          Linux)
+            echo "// TODO"
+            ;;
+
+          *)
+            echo "unsuported os: $(uname -a)"
+            exit 1
+            ;;
+        esac
+    - name: CloudFlare
+      shell: bash
+      run: |
+        case $(uname -s) in
+          Darwin)
+            export HOMEBREW_NO_AUTO_UPDATE='1'
+            brew tap cloudflare/cloudflare
+            export HOMEBREW_NO_INSTALL_CLEANUP='1'
+            brew install cloudflared
+            ;;
+
+          Linux)
+            sudo curl -Lso /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+            sudo chmod +x /usr/local/bin/cloudflared
+            ;;
+
+          *)
+            echo "unsuported os: $(uname -a)"
+            exit 1
+            ;;
+        esac
+
+        LOG="$(mktemp)"
+
+        {
+          _0=$'\e[0m'
+          _1=$'\e[1m'
+          R=$'\e[31m'
+          G=$'\e[32m'
+          Y=$'\e[33m'
+          B=$'\e[34m'
+
+          DELIM="${R}~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*${_0}"
+          LINE00="${_1}To access the runner via SSH:${_0}"
+          LINE01='    1. Execute'
+          LINE02="        ${G}ssh${_0} ${Y}${ARGS}${_0}${B}${USER}@\1${_0}"
+          LINE03=''
+          LINE04="${_1}To access the runner via VNC:${_0}"
+          LINE05='    1. Execute'
+          LINE06="        ${G}ssh${_0} ${Y}-L 5901:localhost:5900${_0} ${B}${USER}@\1${_0}"
+          LINE07='    2. Open'
+          LINE08="        ${G}vnc://${_0}${Y}${USER}:${USER}@${_0}${B}localhost:5901${_0}"
+          LINE09=''
+          LINE10="${_1}To stop the runner, either:${_0}"
+          LINE11='    1. Cancel the workflow'
+          LINE12='    2. Inside the runner, execute'
+          LINE13="        ${G}killall${_0} ${B}cloudflared${_0}"
+          TEXT="\n${DELIM}\n\n${LINE00}\n${LINE01}\n${LINE02}\n${LINE03}\n${LINE04}\n${LINE05}\n${LINE06}\n${LINE07}\n${LINE08}\n${LINE09}\n${LINE10}\n${LINE11}\n${LINE12}\n${LINE13}\n\n${DELIM}\n"
+
+          while true
+          do
+            sed -En "s|.*https://(.*\.trycloudflare\.com).*|${TEXT}|p" "${LOG}"
+            sleep 15
+          done
+        } &
+
+        cloudflared tunnel --url ssh://localhost:22 2>&1 | tee "${LOG}"
