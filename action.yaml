@@ -103,4 +103,7 @@ runs:
           done
         } &
 
-        cloudflared tunnel --url ssh://localhost:22 2>&1 | tee "${LOG}"
+        until cloudflared tunnel --url ssh://localhost:22 2>&1 | tee "${LOG}"
+        do
+          :
+        done
