@@ -29,13 +29,15 @@ runs:
         mkdir -pm 700 ~/.ssh
         curl -Lfs 'https://github.com/${{ github.actor }}.keys' >> ~/.ssh/authorized_keys
         chmod 600 ~/.ssh/authorized_keys
-    - name: SSH
+    - name: VNC
       shell: bash
       run: |
         case $(uname -s) in
           Darwin)
             sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
             sudo launchctl load -wF /System/Library/LaunchDaemons/com.apple.screensharing.plist
+
+            /Library/Application\ Support/VMware\ Tools/vmware-resolutionSet 1024 768 || true
             ;;
 
           Linux)
@@ -52,15 +54,17 @@ runs:
       run: |
         case $(uname -s) in
           Darwin)
-            export HOMEBREW_NO_AUTO_UPDATE='1'
             brew tap cloudflare/cloudflare
-            export HOMEBREW_NO_INSTALL_CLEANUP='1'
             brew install cloudflared
+
+            export PASS="$(sudo cat /private/etc/kcpassword | ruby -e 'k = [0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F]; i = STDIN.read.force_encoding("ASCII"); (i.length % 11 == 0 ? i.unpack("C*") : i.unpack("U*")).each_with_index { |b, i| e = b ^ k[i % k.size]; break if e == 0; print [e].pack("C*") }')"
             ;;
 
           Linux)
             sudo curl -Lso /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
             sudo chmod +x /usr/local/bin/cloudflared
+
+            export PASS="${RANDOM}"
             ;;
 
           *)
@@ -88,7 +92,7 @@ runs:
           LINE05='    1. Execute'
           LINE06="        ${G}ssh${_0} ${Y}-L 5901:localhost:5900${_0} ${B}${USER}@\1${_0}"
           LINE07='    2. Open'
-          LINE08="        ${G}vnc://${_0}${Y}${USER}:${USER}@${_0}${B}localhost:5901${_0}"
+          LINE08="        ${G}vnc://${_0}${Y}${USER}:${PASS}@${_0}${B}localhost:5901${_0}"
           LINE09=''
           LINE10="${_1}To stop the runner, either:${_0}"
           LINE11='    1. Cancel the workflow'
